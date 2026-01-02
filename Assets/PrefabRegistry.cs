@@ -1,3 +1,4 @@
+using Cinemachine;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -22,13 +23,48 @@ public class PrefabRegistry : MonoBehaviour
         }
     }
 
+    [SerializeField]
+    GameObject virtualCamera;
+    [SerializeField]
+    GameObject staticSceenItems, DynamicSceenItems;
+    public string GetAllArtPrefabNames()
+    {
+        if (artList == null || artList.Count == 0)
+            return string.Empty;
+
+        List<string> names = new List<string>();
+
+        foreach (var go in artList)
+        {
+            if (go == null) continue;
+            names.Add(go.name);
+        }
+
+        return string.Join("(prefab), ", names);
+    }
+
+    public string GetAllArtPrefabID()
+    {
+        if (idMap == null || idMap.Count == 0)
+            return string.Empty;
+
+        List<string> names = new List<string>();
+
+        foreach (var go in idMap)
+        {
+            if (go == null) continue;
+            names.Add(go.Id);
+        }
+
+        return string.Join(", ", names);
+    }
     private static PrefabRegistry _Instance;
 
     [Tooltip("美术 prefab 原型列表（仅作为 Instantiate 原型）")]
     public List<GameObject> artList = new List<GameObject>();
 
     [SerializeField] private List<GameObjectId> idMap = new List<GameObjectId>();
-
+    [SerializeField] private List<GameObjectId> DefauIDIdMap = new List<GameObjectId>();
 
     // ------------------------------------------------------------------
     // 美术资源查找
@@ -53,6 +89,25 @@ public class PrefabRegistry : MonoBehaviour
         return null;
     }
 
+
+
+    // ------------------------------------------------------------------
+    // 注册逻辑
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 注册 prefab root，并递归注册所有子对象
+    /// ?? 不修改 Active 状态
+    /// </summary>
+    public void RegisterPrefabRoot(string rootId, GameObject prefabRoot)
+    {
+        if (prefabRoot == null || string.IsNullOrEmpty(rootId))
+            return;
+
+        // Register the root prefab
+        idMap.Add(new GameObjectId(rootId, prefabRoot));
+
+    }
     [ContextMenu("Debug Print All GameObject Name-ID")]
     public void DebugPrintAllGameObjectNameId()
     {
@@ -73,37 +128,6 @@ public class PrefabRegistry : MonoBehaviour
         Debug.Log("===== End Print =====");
     }
 
-    // ------------------------------------------------------------------
-    // 注册逻辑
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// 注册 prefab root，并递归注册所有子对象
-    /// ?? 不修改 Active 状态
-    /// </summary>
-    public void RegisterPrefabRoot(string rootId, GameObject prefabRoot)
-    {
-        if (prefabRoot == null || string.IsNullOrEmpty(rootId))
-            return;
-
-        // Register the root prefab
-        idMap.Add(new GameObjectId(rootId, prefabRoot));
-
-        AssignChildIds(prefabRoot.transform, rootId);
-    }
-
-    private void AssignChildIds(Transform parent, string prefix)
-    {
-        foreach (Transform child in parent)
-        {
-            string childId = $"{prefix}.{child.name}";
-
-            if (!IsRegistered(childId))
-                idMap.Add(new GameObjectId(childId, child.gameObject));
-
-            AssignChildIds(child, childId);
-        }
-    }
 
     // ------------------------------------------------------------------
     // 查询接口
@@ -135,8 +159,19 @@ public class PrefabRegistry : MonoBehaviour
     /// </summary>
     public GameObject FindObjectById(string id)
     {
-        return idMap.Find(item => item.Id == id)?.GameObject;
+        if (string.IsNullOrEmpty(id))
+            return null;
+
+        // 先在主表找
+        var item = idMap.Find(x => x.Id == id);
+        if (item != null)
+            return item.GameObject;
+
+        // 再在默认表找
+        item = DefauIDIdMap.Find(x => x.Id == id);
+        return item?.GameObject;
     }
+
 
     // ------------------------------------------------------------------
     // Instantiate（保持 Active）
@@ -164,7 +199,6 @@ public class PrefabRegistry : MonoBehaviour
 
         string instancePrefix = id + "_inst";
         idMap.Add(new GameObjectId(instancePrefix, go));
-        AssignChildIds(go.transform, instancePrefix);
 
         return go;
     }

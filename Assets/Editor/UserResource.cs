@@ -1,12 +1,78 @@
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
+using static AiHelper.UserResource;
 namespace AiHelper
 {
     [CreateAssetMenu(fileName = "UserResource", menuName = "Resources/UserResource", order = 2)]
     public class UserResource : ScriptableObject
     {
+        public string ProjectName;
+        public bool is3D;
+        public int currentStageIndex;
+        public string GameDesign;
+        public string SystemDesign;
+        public string GameStagesDescription;
+        public List<TitleAndDescription> gameDevelopementStages;
+        public string sceneDesignDescription;
+
+        public GameStageInfo CurrentStageInfo { get { if (GameStageInfos!=null&& currentStageIndex< GameStageInfos.Count) { return GameStageInfos[currentStageIndex];} return null; } }
+        public List<GameStageInfo> GameStageInfos;
+        [ContextMenu("showCode")]
+        void logCurrentCodeInfo()
+        {
+            Debug.Log(currentCodeInfo());
+        }
+        public string currentCodeInfo()
+        {
+            return readFileUtility.GenerateAllCodeDescription(ResourceData.ProjectScriptLocation(ProjectName)).Item1.ToString();
+        }
+        public List<TitleAndDescription> makeGameDevelopmentStageByJson(string jsonText)
+        {
+            if (string.IsNullOrEmpty(jsonText))
+            {
+                Debug.LogError("JSON text is null or empty.");
+                return new List<TitleAndDescription>();
+            }
+
+            StageListWrapper wrapper = JsonUtility.FromJson<StageListWrapper>(jsonText);
+
+            if (wrapper == null || wrapper.stages == null)
+            {
+                Debug.LogError("Failed to parse JSON into stages.");
+                return new List<TitleAndDescription>();
+            }
+
+            // 保存解析的阶段描述
+            gameDevelopementStages = wrapper.stages;
+
+            // 初始化 GameStageInfos，确保数量与阶段数一致
+            if (GameStageInfos == null)
+                GameStageInfos = new List<GameStageInfo>();
+            else
+                GameStageInfos.Clear();
+
+            foreach (var stage in gameDevelopementStages)
+            {
+                GameStageInfos.Add(new GameStageInfo());
+            }
+
+            return gameDevelopementStages;
+        }
+
+
+        [System.Serializable]
+        public class StageListWrapper
+        {
+            public List<TitleAndDescription> stages;
+        }
+        [System.Serializable]
+        public class ScriptBatchesWrapper
+        {
+            public List<CodeBatch> batches;
+        }
         private static UserResource _instance;
 
         // 公开属性，获取唯一实例
@@ -26,63 +92,21 @@ namespace AiHelper
                 return _instance;
             }
         }
+    }
+    [System.Serializable]
+    public class GameStageInfo
+    {
+        public string CodeDesign = "";
+        public string CurrentStageAllPrefabDescription = "";
+        public string MakeSceneDescription = "";
+        public List<CodeBatch> CodeBatchs = new List<CodeBatch>();
+        public List<TitleAndDescription> PrefabDesign = new List<TitleAndDescription>();
+        public int currentCodeBatchIndex = 0;
+        public List<TitleAndDescription> MakeSceneStages = new List<TitleAndDescription>();
+        public int currentPrefabIndex;
+        public string allPrefabCommand;
 
-        public string allPrefabDescription;
-
-        [Header("Resource Metadata")]
-        public string resourceName;  // 资源名称
-        public string description;   // 简介
-        public string resourcePath;  // 资源路径
-
-        [Header("Resource File")]
-        public TextAsset scriptFile; // 如果是脚本资源，可以存储文件
-
-        public string GameDesign;
-
-        public string SystemDesign;
-
-        public string GameStagesDescription;
-
-        public string CodeDesign;
-
-        public string currentCodeInfo()
-        {
-           return readFileUtility.GenerateAllCodeDescription(ResourceData.ProjectScriptLocation(ProjectName)).Item1.ToString();
-        }
-
-        public string PrefabDesignDescription;
-
-        public string ProjectName;
-
-        public int currentStageIndex;
-        // 用于展示的大周期 JSON 数据
-        public List<Stage> stages;
-        public List<Stage> PrefabDesign;
-        public List<CodeBatch> CodeBatchs;
-        public int currentCodeBatchIndex;
-
-        public List<Stage> makeGameDevelopmentStageByJson(string jsonText)
-        {
-            if (string.IsNullOrEmpty(jsonText))
-            {
-                Debug.LogError("JSON text is null or empty.");
-                return null;
-            }
-
-            StageListWrapper wrapper = JsonUtility.FromJson<StageListWrapper>(jsonText);
-
-            if (wrapper == null || wrapper.stages == null)
-            {
-                Debug.LogError("Failed to parse JSON into stages.");
-                return null;
-            }
-
-            stages = wrapper.stages;
-            return stages;
-        }
-        
-
-        public List<Stage> makePrefabDesignByJson(string jsonText)
+        public List<TitleAndDescription> makePrefabDesignByJson(string jsonText)
         {
             if (string.IsNullOrEmpty(jsonText))
             {
@@ -99,7 +123,26 @@ namespace AiHelper
             }
 
             PrefabDesign = wrapper.stages;
-            return stages;
+            return PrefabDesign;
+        }
+        public List<TitleAndDescription> makeSceneDesignByJson(string jsonText)
+        {
+            if (string.IsNullOrEmpty(jsonText))
+            {
+                Debug.LogError("JSON text is null or empty.");
+                return null;
+            }
+
+            StageListWrapper wrapper = JsonUtility.FromJson<StageListWrapper>(jsonText);
+
+            if (wrapper == null || wrapper.stages == null)
+            {
+                Debug.LogError("Failed to parse JSON into stages.");
+                return null;
+            }
+
+            MakeSceneStages = wrapper.stages;
+            return MakeSceneStages;
         }
         public List<CodeBatch> makeCodeGenerationBatchByJson(string jsonText)
         {
@@ -121,33 +164,12 @@ namespace AiHelper
             return CodeBatchs;
         }
 
-        internal string currentArt()
-        {
-            return readFileUtility.GetAllFileNames("Assets/Art");
-        }
-
-        [System.Serializable]
-        public class StageListWrapper
-        {
-            public List<Stage> stages;
-        }
-        [System.Serializable]
-        public class ScriptBatchesWrapper
-        {
-            public List<CodeBatch> batches;
-        }
-    }
 
 
-    public enum StageStatus
-    {
-        Inactive, // 未激活
-        Current,  // 当前阶段
-        Active    // 激活阶段
     }
 
     [System.Serializable]
-    public class Stage
+    public class TitleAndDescription
     {
         public string title;
         public string description;
@@ -158,12 +180,5 @@ namespace AiHelper
     {
         public int batchIndex;
         public List<string> scripts;
-    }
-
-
-
-    public class GameCycle : ScriptableObject
-    {
-        public Stage[] stages; // 所有阶段的链表
     }
 }

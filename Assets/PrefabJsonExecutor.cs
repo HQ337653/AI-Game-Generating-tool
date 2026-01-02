@@ -1,42 +1,22 @@
-using Cinemachine;
+﻿using Cinemachine;
 using System;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
-
-#region JSON Structs
-
-[Serializable]
-public class PrefabStep
-{
-    public string type;        // create_object / add_child / move / add_component / set_property
-    public string id;          // object id
-    public string name;        // object name
-    public string parent;      // parent id
-    public string target;      // target object id
-    public string component;   // component name
-    public string property;    // property name
-    public string value;       // value (string-encoded)
-}
-
-[Serializable]
-public class PrefabRoot
-{
-    public string id;
-    public string name;
-}
-
-[Serializable]
-public class PrefabJson
-{
-    public string prefabName;
-    public PrefabRoot root;
-    public List<PrefabStep> steps;
-}
-
-#endregion
-
 public class PrefabJsonExecutor : MonoBehaviour
 {
+    public static PrefabJsonExecutor Instance
+    {
+        get
+        {
+            if (_Instance == null)
+                _Instance = FindObjectOfType<PrefabJsonExecutor>();
+            return _Instance;
+        }
+    }
+
+    public static PrefabJsonExecutor _Instance;
+
     [TextArea(20, 40)]
     public string prefabJsonText;
 
@@ -48,12 +28,12 @@ public class PrefabJsonExecutor : MonoBehaviour
         ExecutePrefabJsonFromText(prefabJsonText);
     }
 
-    public void ExecutePrefabJsonFromText(string jsonText)
+    public GameObject ExecutePrefabJsonFromText(string jsonText)
     {
         if (string.IsNullOrEmpty(jsonText))
         {
             Debug.LogError("PrefabJsonExecutor: JSON is empty");
-            return;
+            return null;
         }
 
         PrefabJson data;
@@ -64,44 +44,51 @@ public class PrefabJsonExecutor : MonoBehaviour
         catch (Exception e)
         {
             Debug.LogError($"JSON parse failed: {e}");
-            return;
+            return null;
         }
 
         if (data == null || data.steps == null)
         {
             Debug.LogError("Invalid PrefabJson structure");
-            return;
+            return null;
         }
 
-        ExecuteCreateObject(data.steps);
+       var root=  ExecuteCreateObject(data.steps);
         ExecuteAddChild(data.steps);
         ExecuteMove(data.steps);
         ExecuteAddComponent(data.steps);
         ExecuteSetProperty(data.steps);
 
         Debug.Log($"PrefabJsonExecutor: Build finished [{data.prefabName}]");
+        return root;
     }
 
     #region Step Execution
 
-    void ExecuteCreateObject(List<PrefabStep> steps)
+    GameObject ExecuteCreateObject(List<PrefabStep> steps)
     {
+        GameObject lastCreated = null;
+
         foreach (var s in steps)
         {
             if (s.type != "create_object") continue;
 
-            // Check if the object is already registered
             if (PrefabRegistry.Instance.IsRegistered(s.id))
                 continue;
 
             var go = new GameObject(s.name);
-            go.SetActive(false);
+            // go.SetActive(false); // 保持 prefab 自身 Active 状态
             go.transform.SetParent(RegistryParent, false);
 
-            // Register in PrefabRegistry
+            // 注册
             PrefabRegistry.Instance.RegisterPrefabRoot(s.id, go);
+
+            lastCreated = go;
         }
+
+        return lastCreated;
     }
+
 
     void ExecuteAddChild(List<PrefabStep> steps)
     {
@@ -109,13 +96,13 @@ public class PrefabJsonExecutor : MonoBehaviour
         {
             if (s.type != "add_child") continue;
 
-            if (!PrefabRegistry.Instance.IsRegistered(s.parent))
+            var parent = PrefabRegistry.Instance.GetObject(s.parent);
+            if (parent == null)
             {
-                Debug.LogWarning($"add_child parent not found: {s.parent}. Trying to add child {s.name} to parent {s.parent}");
+                Debug.LogWarning($"add_child parent not found: {s.parent}");
                 continue;
             }
 
-            var parent = PrefabRegistry.Instance.GetObject(s.parent);
             GameObject child;
 
             var artPrefab = PrefabRegistry.Instance.GetArtPrefabByName(s.name);
@@ -130,7 +117,9 @@ public class PrefabJsonExecutor : MonoBehaviour
                 child.transform.SetParent(parent.transform, false);
             }
 
-            child.SetActive(false);
+           // child.SetActive(false);
+
+            // ✅ 直接使用 JSON 指定的 id 注册，不再拼 parentId
             PrefabRegistry.Instance.RegisterPrefabRoot(s.id, child);
         }
     }
@@ -145,13 +134,9 @@ public class PrefabJsonExecutor : MonoBehaviour
             var parent = PrefabRegistry.Instance.FindObjectById(s.parent);
 
             if (target != null && parent != null)
-            {
                 target.transform.SetParent(parent.transform, true);
-            }
             else
-            {
-                Debug.LogWarning($"Move failed: target ({s.target}) or parent ({s.parent}) not found. Target: {target}, Parent: {parent}");
-            }
+                Debug.LogWarning($"Move failed: target ({s.target}) or parent ({s.parent}) not found.");
         }
     }
 
@@ -164,18 +149,17 @@ public class PrefabJsonExecutor : MonoBehaviour
             var targetObject = PrefabRegistry.Instance.FindObjectById(s.target);
             if (targetObject == null)
             {
-                Debug.LogWarning($"add_component target not found: {s.target}. Target object: {targetObject}");
+                Debug.LogWarning($"add_component target not found: {s.target}");
                 continue;
             }
 
             var type = ResolveType(s.component);
             if (type == null)
             {
-                Debug.LogWarning($"Component type not found: {s.component}. Trying to add component to {targetObject.name}");
+                Debug.LogWarning($"Component type not found: {s.component} on {targetObject.name}");
                 continue;
             }
 
-            // Add the component only if it doesn't exist
             if (targetObject.GetComponent(type) == null)
                 targetObject.AddComponent(type);
         }
@@ -190,24 +174,15 @@ public class PrefabJsonExecutor : MonoBehaviour
             var targetObject = PrefabRegistry.Instance.FindObjectById(s.target);
             if (targetObject == null)
             {
-                Debug.LogWarning($"set_property target not found: {s.target}. Target object: {targetObject}");
+                Debug.LogWarning($"set_property target not found: {s.target}");
                 continue;
             }
 
             var compType = ResolveType(s.component);
-            if (compType == null)
-            {
-                
-                Debug.LogWarning($"Component type not found for {s.component} on object {targetObject.name}");
-                continue;
-            }
+            if (compType == null) { Debug.LogWarning($"Component type not found: {s.component}"); continue; }
 
             var comp = targetObject.GetComponent(compType);
-            if (comp == null)
-            {
-                Debug.LogWarning($"Component not found: {s.component} on {targetObject.name}. Trying to set property: {s.property}");
-                continue;
-            }
+            if (comp == null) { Debug.LogWarning($"Component not found: {s.component}"); continue; }
 
             var field = compType.GetField(s.property);
             var prop = compType.GetProperty(s.property);
@@ -226,8 +201,6 @@ public class PrefabJsonExecutor : MonoBehaviour
 
             Debug.Log($"[set_property] {s.component}.{s.property} = {valueObj} on {targetObject.name}");
         }
-
-        // ���ͳһ��������ע��Ķ���
     }
 
     #endregion
@@ -238,7 +211,7 @@ public class PrefabJsonExecutor : MonoBehaviour
     {
         var t = Type.GetType("UnityEngine." + name + ", UnityEngine");
         if (t != null) return t;
-        return Type.GetType("Assembly-CSharp." + name + ", Assembly-CSharp");
+        return Type.GetType(name + ", Assembly-CSharp");
     }
 
     object ParseValue(string raw, Type targetType)
@@ -285,4 +258,25 @@ public class PrefabJsonExecutor : MonoBehaviour
     }
 
     #endregion
+}
+
+// JSON 数据结构
+[Serializable]
+public class PrefabJson
+{
+    public string prefabName;
+    public List<PrefabStep> steps;
+}
+
+[Serializable]
+public class PrefabStep
+{
+    public string type;      // create_object / add_child / move / add_component / set_property
+    public string id;        // 对象 ID（直接使用，不拼 parentId）
+    public string parent;    // 用于 add_child / move
+    public string target;    // 用于 move / add_component / set_property
+    public string name;      // 对象名字
+    public string component; // 组件类型
+    public string property;  // 属性名
+    public string value;     // 属性值
 }
