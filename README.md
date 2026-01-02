@@ -156,4 +156,3 @@ ai成功改进了场景。
 美术库
 
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/%E7%BE%8E%E6%9C%AF%E7%B4%A0%E6%9D%90%E5%BA%93.jpg" width="400px" alt="角色生成示例">
-credit：
