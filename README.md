@@ -29,6 +29,187 @@
 目前该项目以 可运行的 Unity Editor 工具 形态存在，适合作为 GamePlay 玩法 Demo 的快速生成与验证工具。
 但从设计上看，该生成流程本身并不依赖 Editor 环境：只要具备对应的Logic Blocks与执行系统，同样的思路也可以被扩展到运行时，在游戏中动态构建游戏对象（比如敌人）地图，甚至一定程度上可以直接制作玩法
 
+## 技术实现
+
+### 代码生成与代码总结
+
+<summary><strong> 代码指令示例 </strong></summary>
+
+```txt
+write_code: file_path=Assets/Scripts/TopdownShooter/UIManager.cs, content=using UnityEngine;\nusing TMPro;\n\n/// <summary>\n/// UIManager：管理游戏内UI元素，包括金币计数、玩家生命值、计时器和胜利/失败面板。\n/// </summary>\npublic class UIManager : MonoBehaviour\n{\n\t/// <var>\n\t/// 玩家生命值文本显示\n\t/// </var>\n\tpublic TMP_Text playerHealthText;\n\n\t/// <var>\n\t/// 金币数量文本显示\n\t/// </var>\n\tpublic TMP_Text coinCountText;\n\n\t/// <var>\n\t/// 游戏计时器文本显示\n\t/// </var>\n\tpublic TMP_Text timerText;\n\n\t/// <var>\n\t/// 胜利面板\n\t/// </var>\n\tpublic GameObject victoryPanel;\n\n\t/// <var>\n\t/// 失败面板\n\t/// </var>\n\tpublic GameObject gameOverPanel;\n\n\t/// <method>\n\t/// 更新玩家生命值显示\n\t/// </method>\n\t/// <param name=\"currentHealth\">当前生命值</param>\n\t/// <param name=\"maxHealth\">最大生命值</param>\n\tpublic void UpdatePlayerHealth(int currentHealth, int maxHealth)\n\t{\n\t\tif(playerHealthText != null)\n\t\t\tplayerHealthText.text = $\"Health: {currentHealth}/{maxHealth}\";\n\t}\n\n\t/// <method>\n\t/// 更新金币数量显示\n\t/// </method>\n\t/// <param name=\"coins\">当前金币数量</param>\n\tpublic void UpdateCoinCount(int coins)\n\t{\n\t\tif(coinCountText != null)\n\t\t\tcoinCountText.text = $\"Coins: {coins}\";\n\t}\n\n\t/// <method>\n\t/// 更新游戏计时器显示\n\t/// </method>\n\t/// <param name=\"seconds\">剩余秒数</param>\n\tpublic void UpdateTimer(int seconds)\n\t{\n\t\tif(timerText != null)\n\t\t\ttimerText.text = $\"Time: {seconds}s\";\n\t}\n\n\t/// <method>\n\t/// 显示胜利面板\n\t/// </method>\n\tpublic void ShowVictory()\n\t{\n\t\tif(victoryPanel != null)\n\t\t\tvictoryPanel.SetActive(true);\n\t}\n\n\t/// <method>\n\t/// 显示失败面板\n\t/// </method>\n\tpublic void ShowGameOver()\n\t{\n\t\tif(gameOverPanel != null)\n\t\t\tgameOverPanel.SetActive(true);\n\t}\n}
+
+```
+
+让ai使用file.WriteAllText写入代码
+
+
+<summary><strong> 代码总结功能 </strong></summary>
+如果有以下代码
+
+``` csharp
+/// <summary>
+/// 控制玩家移动与输入
+/// </summary>
+public class PlayerController : MonoBehaviour
+{
+    /// <var>
+    /// 玩家移动速度
+    /// </var>
+    public float moveSpeed = 5f;
+
+    /// <method>
+    /// 根据输入更新玩家位置
+    /// </method>
+    /// <param name="deltaTime">每帧时间增量</param>
+    public void Move(float deltaTime)
+    {
+        // 移动逻辑
+    }
+}
+
+```
+代码会被提取成这样
+类: 控制玩家移动与输入
+
+变量:
+  moveSpeed（float）: 玩家移动速度
+
+方法:
+  Move(float deltaTime): 根据输入更新玩家位置 (deltaTime: 每帧时间增量)
+
+在生成prefab中，这个建议信息会被代替具体信息给到ai，以减少ai需要处理的数据，并让ai可以集中处理而不是关注代码实现
+
+### gameobjet操作部分
+
+<details>
+<summary><strong>📦 Prefab JSON 指令完整示例（点击展开）</strong></summary>
+
+```json
+{
+  "prefabName": "ExamplePrefab",
+  "steps": [
+    {
+      "type": "create_object",
+      "id": "root_object",
+      "name": "RootObject"
+    },
+    {
+      "type": "add_child",
+      "id": "visual_child",
+      "parent": "root_object",
+      "name": "ExampleArtPrefab"
+    },
+    {
+      "type": "move",
+      "target": "visual_child",
+      "parent": "root_object"
+    },
+    {
+      "type": "add_component",
+      "target": "root_object",
+      "component": "Rigidbody"
+    },
+    {
+      "type": "set_property",
+      "target": "root_object",
+      "component": "Rigidbody",
+      "property": "mass",
+      "value": "5"
+    }
+  ]
+}
+```
+</details>
+
+1️⃣ create_object
+- 目的：在场景中创建一个新的 GameObject（Prefab 根节点或普通对象），并注册到 PrefabRegistry，供后续引用和操作。
+- 代码实现：
+  - 检查对象是否已注册
+  - 用 new GameObject(name) 创建对象
+  - 将对象设置到 PrefabRegistry.Instance.transform 下
+  - 调用 PrefabRegistry.Instance.RegisterPrefabRoot(id, go) 注册
+
+2️⃣ add_child
+- 目的：将一个对象添加为父对象的子对象。可以直接使用已有美术 Prefab，也可以创建空对象。
+- 代码实现：
+  - 获取父对象（parent）
+  - 如果存在同名美术 Prefab，则 Instantiate 并挂到父对象
+  - 否则创建空 GameObject
+
+3️⃣ move
+- 目的：改变已有对象的父子关系，即移动对象到新的父对象下。
+- 代码实现：
+  - 获取目标对象（target）和新的父对象（parent）
+  - 调用 target.transform.SetParent(parent.transform, true)
+  - 如果找不到对象，打印警告
+
+4️⃣ add_component
+- 目的：给指定 GameObject 添加组件。支持 Unity 内置组件和自定义组件。
+- 代码实现：
+  - 获取目标对象（target）
+  - 使用Type.GetType解析component类型
+  - 如果对象上不存在该组件，则 AddComponent(type)
+
+5️⃣ set_property
+- 目的：设置对象上组件的属性值（字段或属性），支持多种类型，包括基础类型、向量/四元数/颜色，以及对象或组件引用。
+
+- 代码实现：
+
+  1. **基础类型**
+     - 支持 int、float、bool、string。
+     - 直接将 JSON 中 value 转换为对应类型并赋值给字段或属性。
+
+  2. **向量 / 四元数 / 颜色**
+     - 支持 Vector2、Vector3、Quaternion、Color。
+     - JSON 中 value 为逗号分隔的数字序列，例如 `"1,0,2"`。
+     - 解析后构建对应对象类型，并赋值给字段或属性。
+
+  3. **对象或组件引用**
+     - 对象引用：`"object:对象ID"`，从 PrefabRegistry 获取对应 GameObject。
+     - 组件引用：`"component:对象ID:组件类型"`，先获取对象，再获取组件实例。
+     - 解析完成后，将引用赋值给目标字段或属性。
+
+## 成果展示
+
+### 角色生成
+<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%88%B6%E4%BD%9C%E7%8E%A9%E5%AE%B6prefab%E6%80%9D%E8%80%83%E4%B8%8Ejson.jpg" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%20%E7%8E%A9%E5%AE%B6%E5%B1%95%E7%A4%BA.jpg" width="400px" alt="角色生成示例">
+
+AI 成功挑选美术资源并附加到 GameObject 上
+自动设置脚本字段，包括引用其他 GameObject 或 Component
+  - player shooting在Fire point字段成功赋值了自己child object的transform
+  - Bullet Prefab 字段成功赋值为另一个 GameObject；
+
+这个例子展示了AI对全局资源引用关系的处理能力，不仅能生成单个角色，还能确保各个 GameObject、Prefab、Component 和脚本字段之间的引用关系正确
+
+### 场景生成
+
+
+AI 能根据美术资源限制和玩法需求生成合理的场景布局,比如意识到了地图边界可以用已有的资源-小山，来对玩家进行阻挡
+
+<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%20%E5%9C%BA%E6%99%AF%E8%AE%BE%E8%AE%A1.jpg" width="400px" alt="角色生成示例">
+
+这是它生成的第一个场景
+
+<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%901.png" width="400px" alt="角色生成示例">
+
+
+对ai进行了两次对话后
+
+<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA1.png" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA2.png" width="400px" alt="角色生成示例">
+
+
+ai成功改进了场景。
+
+<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%902.png" width="400px" alt="角色生成示例">
+
+
+这说明ai
+  - 不仅能生成场景还，具备“半监督迭代”能力，可让设计师或玩家通过文字调整生成结果  
+  - 能够理解玩法需求
+  - 能理解空间布局
+
+
+
 ## 使用方式
 流程设计：
 
@@ -98,44 +279,6 @@ debug验收阶段
 
 还在制作
 
-## 成果展示
-
-### 角色生成
-<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%88%B6%E4%BD%9C%E7%8E%A9%E5%AE%B6prefab%E6%80%9D%E8%80%83%E4%B8%8Ejson.jpg" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%20%E7%8E%A9%E5%AE%B6%E5%B1%95%E7%A4%BA.jpg" width="400px" alt="角色生成示例">
-
-AI 成功挑选美术资源并附加到 GameObject 上
-自动设置脚本字段，包括引用其他 GameObject 或 Component
-  - player shooting在Fire point字段成功赋值了自己child object的transform
-  - Bullet Prefab 字段成功赋值为另一个 GameObject；
-
-这个例子展示了AI对全局资源引用关系的处理能力，不仅能生成单个角色，还能确保各个 GameObject、Prefab、Component 和脚本字段之间的引用关系正确
-
-### 场景生成
-
-
-AI 能根据美术资源限制和玩法需求生成合理的场景布局,比如意识到了地图边界可以用已有的资源-小山，来对玩家进行阻挡
-
-<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%20%E5%9C%BA%E6%99%AF%E8%AE%BE%E8%AE%A1.jpg" width="400px" alt="角色生成示例">
-
-这是它生成的第一个场景
-
-<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%901.png" width="400px" alt="角色生成示例">
-
-
-对ai进行了两次对话后
-
-<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA1.png" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA2.png" width="400px" alt="角色生成示例">
-
-
-ai成功改进了场景。
-
-<img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%902.png" width="400px" alt="角色生成示例">
-
-
-这说明ai
-  - 不仅能生成场景还，具备“半监督迭代”能力，可让设计师或玩家通过文字调整生成结果  
-  - 能够理解玩法需求
-  - 能理解空间布局
 
 
 ## 未来改进
