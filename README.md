@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-这是一个基于 Unity Editor 的 AI 辅助游戏生成工具原型，用于探索 AI 能否在半监督的条件下生成能够使用的项目文件。
+这是一个基于 Unity Editor 的 AI 辅助游戏生成工具原型，用于探索 AI 是否能在半监督条件（即由 AI 进行主要生成，人类通过 Prompt、阶段确认和 Debug 进行引导与修正）下生成可直接使用的项目文件。
 
 ### 该工具通过一份 玩法设计描述，引导 AI 系统化地拆解并规划游戏内容，包括：
 
@@ -13,26 +13,29 @@
 
 
 
-### 在生成过程中，AI 输出以 命令式指令（Command Line）和 JSON 数据 的形式进行，实现对游戏内容的结构化控制，包括：
+### 在生成过程中，AI 输出以 命令式指令（Command-based Instruction）和 JSON 数据 的形式进行，实现对游戏内容的结构化控制，包括：
 
 	- 自动生成和修改 C# 脚本
 	- 创建和配置 GameObject / Prefab
 	- 选择和组合美术资源的呈现方式
 	- 配置脚本字段类型（数值、Vector3、对象引用等）
 
-### 在进行prefab/场景生成的时候，ai会在美术素材库中挑选合适的素材使用，
-当前框架中，AI 对美术资源的使用是通过 Prefab 名称映射实现的，这意味着系统能够准确识别已有资源的内容并将其应用于生成的场景与 Prefab。
-该机制天然支持 美术资源的扩展：新增资源可以直接加入库中供 AI 调用。
-如果需要，甚至可以使用CLIP 等视觉模型对大量未命名资源进行命名，然后再导入此项目来使用
+### 在进行 Prefab / 场景生成 时，AI 会从美术素材库中挑选合适的素材使用。
+当前框架中，AI 对美术资源的使用是通过 Prefab 名称映射实现的，这意味着系统能够准确识别已有资源的内容并将其应用于生成的场景与 Prefab。 该机制天然支持 美术资源的扩展：新增资源可以直接加入库中供 AI 调用。 如果需要，甚至可以使用 CLIP 等视觉模型 对大量未命名资源进行自动命名，再导入本项目供 AI 使用。
 
 
-目前该项目以 可运行的 Unity Editor 工具 形态存在，适合作为 GamePlay 玩法 Demo 的快速生成与验证工具。
-但从设计上看，该生成流程本身并不依赖 Editor 环境：只要具备对应的Logic Blocks与执行系统，同样的思路也可以被扩展到运行时，在游戏中动态构建游戏对象（比如敌人）地图，甚至一定程度上可以直接制作玩法
+目前该项目以 可运行的 Unity Editor 工具 形态存在，适合作为 GamePlay 玩法 Demo 的快速生成与验证工具。 但从设计上看，该生成流程本身并不依赖 Editor 环境：只要具备对应的Logic Blocks与执行系统，同样的思路也可以被扩展到运行时，在游戏中动态构建游戏对象（比如敌人）地图，甚至在一定程度上可以直接生成并组合玩法逻辑。
 
 ## 技术实现
 
 ### 代码生成与代码总结
 
+	- LLM 驱动的玩法拆解与开发阶段规划
+	- 命令式 + JSON 的 Unity 内容生成指令系统
+	- 基于 Prefab Registry 的跨对象引用管理
+	- 半监督、多轮迭代的生成与 Debug 流程  
+	- 代码生成与代码总结机制
+ 
 <summary><strong> 代码指令示例 </strong></summary>
 
 ```txt
@@ -40,7 +43,7 @@ write_code: file_path=Assets/Scripts/TopdownShooter/UIManager.cs, content=using 
 
 ```
 
-让ai使用file.WriteAllText写入代码
+实际实现中，系统通过 File.WriteAllText 方式将 AI 生成的代码写入 Unity 项目文件中。
 
 
 <summary><strong> 代码总结功能 </strong></summary>
@@ -68,7 +71,9 @@ public class PlayerController : MonoBehaviour
 }
 
 ```
-代码会被提取成这样
+代码会被提取成这样：
+
+``` txt
 类: 控制玩家移动与输入
 
 变量:
@@ -76,10 +81,12 @@ public class PlayerController : MonoBehaviour
 
 方法:
   Move(float deltaTime): 根据输入更新玩家位置 (deltaTime: 每帧时间增量)
+```
 
-在生成prefab中，这个建议信息会被代替具体信息给到ai，以减少ai需要处理的数据，并让ai可以集中处理而不是关注代码实现
 
-### gameobjet操作部分
+在生成Prefab中，这些简要信息会被用于替代具体代码内容提供给 AI，以减少AI需要处理的数据，并让AI可以集中处理逻辑而不是关注代码实现，同时防止消息过长
+
+### GameObject操作部分
 
 <details>
 <summary><strong>📦 Prefab JSON 指令完整示例（点击展开）</strong></summary>
@@ -171,6 +178,28 @@ public class PlayerController : MonoBehaviour
 
 ## 成果展示
 
+### 游戏成品
+
+展示了一个基本完全由本管线生成的游戏，内容是一个第三视角俯视角射击游戏
+
+在该示例中，AI 生成了玩家输入处理逻辑、敌人追逐行为等核心系统，并在 Unity 中成功运行，同时生成了与玩法匹配的场地布局。
+
+
+在完成现有阶段后，我尝试用AI进行debug 通过图片加描述/unity log信息加脚本简介与内容 AI成功识别并且修复了 
+
+1）地面高度不合理问题 
+
+2）玩家子弹会打到玩家然后直接消失的问题
+
+该结果表明，大语言模型能够综合多模态输入（图像、日志、代码结构描述），对游戏中的逻辑与空间问题进行有效诊断与修复。
+
+这是这个项目使用的聊天记录，包括prompt和AI的自然语言与结构性输出 
+
+https://chatgpt.com/share/695ad6ba-ccc0-8007-b5da-c3c90a7c8050（Prefab制作前内容） 
+
+https://yb.tencent.com/s/h43L4a0x9aoj（Prefab制作后内容）
+
+
 ### 角色生成
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%88%B6%E4%BD%9C%E7%8E%A9%E5%AE%B6prefab%E6%80%9D%E8%80%83%E4%B8%8Ejson.jpg" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%20%E7%8E%A9%E5%AE%B6%E5%B1%95%E7%A4%BA.jpg" width="400px" alt="角色生成示例">
 
@@ -193,17 +222,17 @@ AI 能根据美术资源限制和玩法需求生成合理的场景布局,比如�
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%901.png" width="400px" alt="角色生成示例">
 
 
-对ai进行了两次对话后
+对AI进行了两次对话后
 
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA1.png" width="400px" alt="角色生成示例"><img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E8%AE%A8%E8%AE%BA2.png" width="400px" alt="角色生成示例">
 
 
-ai成功改进了场景。
+AI成功改进了场景。
 
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/ai%E5%9C%BA%E6%99%AF%E7%94%9F%E6%88%902.png" width="400px" alt="角色生成示例">
 
 
-这说明ai
+这说明AI
   - 不仅能生成场景还，具备“半监督迭代”能力，可让设计师或玩家通过文字调整生成结果  
   - 能够理解玩法需求
   - 能理解空间布局
@@ -265,7 +294,7 @@ flowchart TD
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90%E7%95%8C%E9%9D%A2.jpg" width="400px" alt="角色生成示例">
 
 
-prefab阶段展示
+Prefab阶段展示
 
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/prefab%E7%95%8C%E9%9D%A2.jpg" width="400px" alt="角色生成示例">
 
@@ -277,25 +306,25 @@ prefab阶段展示
 
 debug验收阶段
 
-还在制作
+(正在开发中)
 
 
 
-## 未来改进
+## 未来改进方向”
 
 1 实现联网功能
 
-2 完成在editor内与ai讨论的逻辑
+2 完成在editor内与AI讨论的逻辑
 
-3 在prefab与场景直接新增单独ui制作阶段
+3 新增单独ui制作阶段
 
 4 优化prompt
 
-5 优化流程，让ai明确区分prefab制作，singleton制作，场景制作
-
-6 支持2d功能
+5 支持2d功能
 
 ## 其他信息
 美术库
 
 <img src="https://github.com/HQ337653/AI-Game-Generating-tool/blob/main/ScreenShoot/%E7%BE%8E%E6%9C%AF%E7%B4%A0%E6%9D%90%E5%BA%93.jpg" width="400px" alt="角色生成示例">
+
+
