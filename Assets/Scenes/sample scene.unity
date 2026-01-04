@@ -606,7 +606,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1058055847}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.22775611, y: 0, z: 0, w: 0.9737182}
   m_LocalPosition: {x: 0, y: 5.88, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -813,11 +813,11 @@ MonoBehaviour:
   - {fileID: 6941765000743290380, guid: 3166cbe1491ba734091e8879cb3793c0, type: 3}
   - {fileID: 2807449429036958551, guid: eeab424b8e0f6ee449cdfde3dc06c13f, type: 3}
   - {fileID: 9069115365609291303, guid: 40987ead133757944b18f192bdfcf851, type: 3}
-  - {fileID: 3708218811573945219, guid: 8e480d230a227ce45bdb99215b11954f, type: 3}
+  - {fileID: 8078876307554794626, guid: 68e06f35e34ba234f8c985c5895cd323, type: 3}
   - {fileID: 6711898488641276436, guid: d167cf1f9768c2949a6d378200b59145, type: 3}
   idMap: []
   DefauIDIdMap:
-  - Id: DefaultVirtualCamera
+  - Id: DefalutVirtualCamera
     GameObject: {fileID: 1779275703}
   - Id: DefaultSceneStaticItemRoot
     GameObject: {fileID: 345755254}
@@ -851,7 +851,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_RootOrder: 2
+  m_RootOrder: 3
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1779275703
 GameObject:
@@ -915,15 +915,15 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1779275703}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.22775611, y: 0, z: 0, w: 0.9737182}
   m_LocalPosition: {x: 0, y: 5.88, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 943608996}
   m_Father: {fileID: 0}
-  m_RootOrder: 3
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_RootOrder: 2
+  m_LocalEulerAnglesHint: {x: 26.33, y: 0, z: 0}
 --- !u!1 &1870326946
 GameObject:
   m_ObjectHideFlags: 0

@@ -40,7 +40,7 @@ public class PrefabRegistry : MonoBehaviour
             names.Add(go.name);
         }
 
-        return string.Join("(prefab), ", names);
+        return string.Join("(prefab), ", names)+ "(prefab)";
     }
 
     public string GetAllArtPrefabID()
