@@ -195,9 +195,11 @@ public class PlayerController : MonoBehaviour
 
 这是这个项目使用的聊天记录，包括prompt和AI的自然语言与结构性输出 
 
-https://chatgpt.com/share/695ad6ba-ccc0-8007-b5da-c3c90a7c8050（Prefab制作前内容） 
+https://chatgpt.com/share/695ad6ba-ccc0-8007-b5da-c3c90a7c8050
+（Prefab制作前内容） 
 
-https://yb.tencent.com/s/h43L4a0x9aoj（Prefab制作后内容）
+https://yb.tencent.com/s/h43L4a0x9aoj
+（Prefab制作后内容）
 
 
 ### 角色生成
